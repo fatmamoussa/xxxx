@@ -20,7 +20,7 @@ from app.drift_detect import detect_drift
 # ============================================================
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("bank-churn-api")
+logger = logging.getLogger("churn-api")
 
 APPINSIGHTS_CONN = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
 if APPINSIGHTS_CONN:
