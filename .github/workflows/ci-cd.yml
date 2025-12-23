@@ -9,9 +9,10 @@ on:
 
 env:
   AZURE_RESOURCE_GROUP: rg-mlops-bank-churn1
-  ACR_NAME: mlopsfatma1766152038      # nom de l'ACR
-  CONTAINER_APP_NAME: bank-churn      # nom de la Container App
-  IMAGE_NAME: churn-api                # nom de l'image Docker
+  ACR_NAME: mlopsfatma1766152038
+  CONTAINER_APP_NAME: bank-churn
+  IMAGE_NAME: churn-api
+  CONTAINERAPPS_ENV: my-containerapps-env   # <-- Nom de ton Container Apps Environment
 
 jobs:
   test:
@@ -69,13 +70,28 @@ jobs:
       - name: Deploy to Azure Container Apps
         uses: azure/CLI@v1
         with:
+          azcliversion: 2.92.0
           inlineScript: |
             az extension add --name containerapp --upgrade
-            echo "🔄 Updating Container App..."
-            az containerapp update \
-              --name ${{ env.CONTAINER_APP_NAME }} \
-              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+            # Check if Container App exists
+            if ! az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} &> /dev/null; then
+              echo "🚀 Container App does not exist. Creating..."
+              az containerapp create \
+                --name ${{ env.CONTAINER_APP_NAME }} \
+                --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+                --environment ${{ env.CONTAINERAPPS_ENV }} \
+                --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+                --cpu 0.5 --memory 1.0Gi \
+                --ingress external \
+                --target-port 80
+            else
+              echo "🔄 Container App exists. Updating..."
+              az containerapp update \
+                --name ${{ env.CONTAINER_APP_NAME }} \
+                --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+                --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            fi
       
       - name: Verify deployment
         run: |
@@ -86,4 +102,4 @@ jobs:
           echo "Application deployed at: https://$APP_URL"
           sleep 30
           curl -f https://$APP_URL/health || exit 1
-          echo "Deployment successful!"
+          echo "✅ Deployment successful!"
