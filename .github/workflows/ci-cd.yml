@@ -12,7 +12,6 @@ env:
   ACR_NAME: mlopsfatma1766152038      # nom de l'ACR
   CONTAINER_APP_NAME: bank-churn      # nom de la Container App
   IMAGE_NAME: churn-api                # nom de l'image Docker
-  AZURE_CONTAINERAPPS_ENV: env-mlops-workshop  # environnement existant
 
 jobs:
   test:
@@ -76,7 +75,6 @@ jobs:
             az containerapp update \
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --environment ${{ env.AZURE_CONTAINERAPPS_ENV }} \
               --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
       
       - name: Verify deployment
