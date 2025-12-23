@@ -12,3 +12,4 @@ SP_JSON=$(az ad sp create-for-rbac \
 echo $SP_JSON | jq -c '{clientId: .appId, clientSecret: .password, subscriptionId: "'"$SUBSCRIPTION_ID"'", tenantId: .tenant}'
 
 #fatmamoussa
+#sddfghjkljhgfdf
