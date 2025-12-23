@@ -12,7 +12,8 @@ env:
   ACR_NAME: mlopsfatma1766152038
   CONTAINER_APP_NAME: bank-churn
   IMAGE_NAME: churn-api
-  CONTAINERAPPS_ENV: my-containerapps-env   # Nom de ton Container Apps Environment
+  CONTAINERAPPS_ENV: env-mlops-workshop
+  # Nom de ton Container Apps Environment
   AZURE_CLI_VERSION: 2.81.0                # Version CLI stable
 
 jobs:
