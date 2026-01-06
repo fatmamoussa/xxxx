@@ -12,9 +12,8 @@ env:
   ACR_NAME: mlopsfatma1766152038
   CONTAINER_APP_NAME: bank-churn
   IMAGE_NAME: churn-api
-  CONTAINERAPPS_ENV: env-mlops-workshop
-  # Nom de ton Container Apps Environment
-  AZURE_CLI_VERSION: 2.81.0                # Version CLI stable
+  CONTAINERAPPS_ENV: env-mlops-workshop  # Fixed environment name
+  AZURE_CLI_VERSION: 2.81.0
 
 jobs:
   test:
@@ -58,6 +57,29 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # First check if the environment exists
+      - name: Check Container Apps Environment
+        uses: azure/CLI@v1
+        with:
+          azcliversion: ${{ env.AZURE_CLI_VERSION }}
+          inlineScript: |
+            echo "Checking Container Apps Environment..."
+            az extension add --name containerapp --upgrade
+            
+            # List available environments
+            echo "Available Container Apps Environments:"
+            az containerapp env list --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "[].name" -o tsv || true
+            
+            # Check if our target environment exists
+            if az containerapp env show --name ${{ env.CONTAINERAPPS_ENV }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} &> /dev/null; then
+              echo "✅ Environment '${{ env.CONTAINERAPPS_ENV }}' exists."
+            else
+              echo "❌ Environment '${{ env.CONTAINERAPPS_ENV }}' not found!"
+              echo "Available environments in resource group:"
+              az containerapp env list --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+              exit 1
+            fi
+
       - name: Login to ACR
         uses: azure/docker-login@v1
         with:
@@ -79,8 +101,17 @@ jobs:
         with:
           azcliversion: ${{ env.AZURE_CLI_VERSION }}
           inlineScript: |
-            az extension add --name containerapp --upgrade
-
+            echo "Deploying to Container App: ${{ env.CONTAINER_APP_NAME }}"
+            echo "Using environment: ${{ env.CONTAINERAPPS_ENV }}"
+            
+            # Verify the environment one more time
+            ENV_ID=$(az containerapp env show \
+              --name ${{ env.CONTAINERAPPS_ENV }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --query id -o tsv)
+            
+            echo "Environment ID: $ENV_ID"
+            
             if ! az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} &> /dev/null; then
               echo "🚀 Container App does not exist. Creating..."
               az containerapp create \
@@ -90,7 +121,8 @@ jobs:
                 --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
                 --cpu 0.5 --memory 1.0Gi \
                 --ingress external \
-                --target-port 80
+                --target-port 80 \
+                --min-replicas 1 --max-replicas 3
             else
               echo "🔄 Container App exists. Updating..."
               az containerapp update \
@@ -101,11 +133,26 @@ jobs:
 
       - name: Verify deployment
         run: |
+          echo "Verifying deployment..."
           APP_URL=$(az containerapp show \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --query properties.configuration.ingress.fqdn -o tsv)
+          
           echo "Application deployed at: https://$APP_URL"
+          echo "Waiting for application to be ready..."
           sleep 30
-          curl -f https://$APP_URL/health || exit 1
-          echo "✅ Deployment successful!"
+          
+          # Try multiple times to account for startup time
+          for i in {1..5}; do
+            echo "Attempt $i to check application health..."
+            if curl -f -s -o /dev/null -w "%{http_code}" https://$APP_URL/health; then
+              echo ""
+              echo "✅ Deployment successful! Health check passed."
+              exit 0
+            fi
+            sleep 10
+          done
+          
+          echo "❌ Health check failed after multiple attempts"
+          exit 1
